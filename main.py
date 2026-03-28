@@ -2,7 +2,7 @@ import sys
 import math
 import random
 
-# python main.py <network_size> <total_stake> <total_sc> <sc_value> <threshhold_function> <how_often_threshold_adjusts> <blocks_number_to_simulate>
+# python main.py <network_size> <total_stake> <total_sc> <sc_value> <threshhold_function> <how_often_threshold_adjusts> <blocks_number_to_simulate> <scaling_function>
 
 # network_size: int - number of nodes in the network 
 # total_stake: int - total eth in stake on the network
@@ -11,14 +11,15 @@ import random
 # threshhold_function: str - function to be used to calculate threshhold (1/x)
 # how_often_threshold_adjusts: int - after whitch amount of blocks the threshhold adjusts
 # blocks_number_to_simulate: int - total amount of blocks to create in simulation
+# scaling_function: str
 
-# python main.py 20 10 5000 1 1/20 10 1000
+# python main.py 20 10 5000 1 1/20 10 1000 sqrt
 
 def main():
     # Parameters
     print("Parameters:")
 
-    network_size = int(sys.argv[1]) # 10, 100, 1000, 10000
+    network_size = int(sys.argv[1]) # int
     print(f"there are {network_size} nodes in the network")
 
     total_stake = int(sys.argv[2]) # int
@@ -40,12 +41,15 @@ def main():
     blocks_number_to_simulate = int(sys.argv[7]) # int
     print(f"the simulation is run with {blocks_number_to_simulate} blocks")
 
+    scaling_function = sys.argv[8] # sqrt, log2
+    print(f"scaling function is {scaling_function}")
+
     print()
 
     # Derived parameters
     print("Derived parameters:")
 
-    print(f"stake to sc ratio is: x{total_stake / (total_sc * sc_value)}")
+    print(f"stake to sc ratio is: x{total_stake / (total_sc * sc_value)}") # TODO: ask what exactly does ratio have to represnt
     
     num_users_with_sc = int(total_sc / 500)
     print(f"num of nodes with sc: {num_users_with_sc}")
@@ -55,7 +59,7 @@ def main():
 
     print(f"stake_users to sc_users ratio is: x{num_users_with_stake / num_users_with_sc}")
 
-    # Generate users
+    # Generate users TODO: ask how do i distribute stake and sc in the simulation
     users_with_sc = generate_users(num_users_with_sc, total_sc) # num_users_with_sc records with numbers from 0 summing up to total_sc     
     users_with_stake = generate_users(num_users_with_stake, total_stake) # num_users_with_stake records with numbers from 0 summing up to total_stake
     
@@ -71,13 +75,13 @@ def main():
         all_users.append({"type": "stake", "amount": stake})
 
 
-    # Filter users
+    # Filter users TODO: ask about threshhold function implementation
     sc_threshhold = calculate_threshhold(total_sc, threshhold_function)
     stake_threshhold = calculate_threshhold(total_stake, threshhold_function)
     filtered_users = filter_users(all_users, stake_threshhold, sc_threshhold)
     
     print()
-    print(f"Social Capital Threshhod: {sc_threshhold} - Stake threshhold: {stake_threshhold}")
+    print(f"Social Capital Threshhod: {sc_threshhold} ({sc_threshhold * sc_value}) - Stake threshhold: {stake_threshhold}")
     print()
     print(f"Filtered users:")
     fu = ""
@@ -92,8 +96,9 @@ def main():
     sc_count = 0
     stake_count = 0
     print("index\taction\t\t\tamount\tblock creator")
-    for i in range(blocks_number_to_simulate):                                                                                                         
-        w = [scale_stake_or_sc(user["amount"] if user["type"] == "stake" else user["amount"] * sc_value, "sqrt") for user in filtered_users]
+    for i in range(blocks_number_to_simulate):
+        # Select the block creator based on weighted randomness, weight are scaled with scaling function                                                                                                       
+        w = [scale_stake_or_sc(user["amount"] if user["type"] == "stake" else user["amount"] * sc_value, scaling_function) for user in filtered_users]
         block_creator = random.choices(filtered_users, weights=w, k=1)[0]
 
         if block_creator["type"] == "sc":
@@ -109,7 +114,7 @@ def main():
                 all_users.append({"type": "sc", "amount": 500})
                 total_sc += 500
                 num_users_with_sc += 1
-                print(f"{i}:\tnew sc user\t\t{500}")
+                print(f"{i}:\tnew sc user\t\t{500}\t{block_creator["type"]}")
 
             # 2. Endorese another sc user
             case 2:
@@ -135,17 +140,19 @@ def main():
                             user["amount"] += sc
                         index += 1
 
-                print(f"{i}:\tnew endorsement\t\t{sc}")
+                print(f"{i}:\tnew endorsement\t\t{sc}\t{block_creator["type"]}")
 
             # 3. Register new stake user
             case 3:
-                all_users.append({"type": "stake", "amount": 1})
-                total_stake += 1
+                amount = int(500 * sc_value)
+                all_users.append({"type": "stake", "amount": amount}) # TODO: not sure about amount logic
+                total_stake += amount
                 num_users_with_stake += 1
-                print(f"{i}:\tnew stake user\t\t{1}")
+                print(f"{i}:\tnew stake user\t\t{amount}\t{block_creator["type"]}")
 
             # 4. Stake some amount of eth
             case 4:
+                # TODO: should i leave the currancy as integers for simplicity or shuold i make them floats for more accurate results
                 staker = random.randint(0, num_users_with_stake - 1)
                 
                 # find staker
@@ -159,7 +166,7 @@ def main():
 
                         index += 1
 
-                print(f"{i}:\tnew stake\t\t{stake}")
+                print(f"{i}:\tnew stake\t\t{stake}\t{block_creator["type"]}")
         
 
         # Check i and update threshhold
@@ -169,7 +176,7 @@ def main():
                 filtered_users = filter_users(all_users, stake_threshhold, sc_threshhold)
 
                 print()
-                print(f"Social Capital Threshhod: {sc_threshhold} - Stake threshhold: {stake_threshhold}")
+                print(f"Social Capital Threshhod: {sc_threshhold} ({sc_threshhold * sc_value}) - Stake threshhold: {stake_threshhold}")
                 print(f"Filtered users:")
                 fu = ""
                 for user in filtered_users:
@@ -178,6 +185,8 @@ def main():
                     elif user["type"] == "sc":
                         fu += f"{user["type"]} - {user["amount"] * sc_value}\n"
                 print(fu)
+                if i+1 != blocks_number_to_simulate:
+                    print("index\taction\t\t\tamount\tblock creator")
 
     print()
 
@@ -204,13 +213,20 @@ def scale_stake_or_sc(num, select):
     match select:
         case "sqrt":
             return math.sqrt(num)
-
+        # TODO: should log2 scaling function allow negative values for num < 1 or make them 0 
+        case "log2":
+            if num > 1:      
+                return math.log2(num)
+            else:
+                return 0
+        
 
 def calculate_threshhold(num, select):
     if "/" in select:
         return num / int(select[2:])
 
 
+# TODO: what if user is already in the filterd users list because they passed the threshhold and then they decrease their stake 
 def filter_users(all_users, stake_threshhold, sc_threshhold):
     filtered_users = []
     for user in all_users:

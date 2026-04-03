@@ -19,7 +19,9 @@ import numpy as np
 
 # python main.py 20 10 5000 1 1/20 10 100 sqrt
 
-# TODO: possibly keep the gini index in mind in block creation loop
+STAKE_GINI = 0.9
+SC_GINI = 0.75
+
 def main():
     # Parameters
     print("Parameters:")
@@ -65,8 +67,8 @@ def main():
     print(f"stake_users to sc_users ratio is: x{num_users_with_stake / num_users_with_sc}")
 
     # Generate users
-    users_with_sc = generate_sc_users(num_users_with_sc, total_sc) # with gini coefficient     
-    users_with_stake = generate_stake_users(num_users_with_stake, total_stake) # randomly
+    users_with_sc = generate_users(num_users_with_sc, total_sc, "sc") # with gini coefficient     
+    users_with_stake = generate_users(num_users_with_stake, total_stake, "stake") # randomly
     
     print()
     print(f"Users with SC: {users_with_sc}")
@@ -124,7 +126,6 @@ def main():
                 sc_users_values = [user["amount"] for user in sc_users]
 
                 gini = gini_index(sc_users_values)
-                print(f"gini: {gini}")
                 
                 # choose amount
                 amount = random.randint(0, 500)
@@ -141,7 +142,7 @@ def main():
                 endorsement["amount"] += amount2
 
                 total_sc += 500
-                print(f"{i}:\tnew sc user\t\t{500}\t{block_creator["type"]}")
+                print(f"{i}:\tnew sc user\t\t{amount}\t{block_creator["type"]}\t\tsc:    {gini}")
 
             # 2. Endorese another sc user
             case 2:
@@ -149,13 +150,15 @@ def main():
                 sc_users_values = [user["amount"] for user in sc_users]
 
                 gini = gini_index(sc_users_values)
-                print(f"gini: {gini}")
                 
                 # Choose random endorser
                 endorser = random.choice(sc_users)
-                
-                # Choose weighted endorsment by social capital
-                endorsement = random.choices(sc_users, weights=sc_users_values, k=1)[0]
+
+                if gini < SC_GINI:
+                    # Choose weighted endorsment by social capital (increases gini)
+                    endorsement = random.choices(sc_users, weights=sc_users_values, k=1)[0]
+                else:
+                    endorsement = random.choice(sc_users)                    
                                 
                 # handle endorser
                 amount = random.randint(0, endorser["amount"])
@@ -164,32 +167,41 @@ def main():
                 # handle endorsement
                 endorsement["amount"] += amount
 
-                print(f"{i}:\tnew endorsement\t\t{sc}\t{block_creator["type"]}")
+                print(f"{i}:\tnew endorsement\t\t{amount}\t{block_creator["type"]}\t\tsc:    {gini}")
 
             # 3. Register new stake user
             case 3:
-                amount = 500 * sc_value
+                stake_users = [user for user in all_users if user["type"] == "stake"]
+                stake_users_values = [user["amount"] for user in stake_users]
+
+                gini = gini_index(stake_users_values)
+
+                amount = 0
                 all_users.append({"type": "stake", "amount": amount})
                 total_stake += amount
                 num_users_with_stake += 1
-                print(f"{i}:\tnew stake user\t\t{amount}\t{block_creator["type"]}")
+
+                print(f"{i}:\tnew stake user\t\t{amount}\t{block_creator["type"]}\t\tstake: {gini}")
 
             # 4. Stake some amount of eth
             case 4:
-                staker = random.randint(0, num_users_with_stake - 1)
+                stake_users = [user for user in all_users if user["type"] == "stake"]
+                stake_users_values = [user["amount"] for user in stake_users]
+
+                gini = gini_index(stake_users_values)
+
+                if gini < STAKE_GINI:
+                    # choose user (weighted) to icrease gini     
+                    staker = random.choices(stake_users, weights=stake_users_values, k=1)[0]
+                else:
+                    # choose user (randomly) to decrease gini
+                    staker = random.choice(stake_users)
+
+                amount = 500 * sc_value
+                staker["amount"] += amount
+                total_stake += amount
                 
-                # find staker
-                index = 0
-                for user in all_users:
-                    if user["type"] == "stake":
-                        if index == staker:                            
-                            stake = random.randint(int(-user["amount"]), int(user["amount"]))
-                            user["amount"] += stake
-                            break
-
-                        index += 1
-
-                print(f"{i}:\tnew stake\t\t{stake}\t{block_creator["type"]}")
+                print(f"{i}:\tnew stake\t\t{stake}\t{block_creator["type"]}\t\tstake: {gini}")
         
 
         # Check i, update threshold and add users to the filtered_users list
@@ -209,7 +221,7 @@ def main():
                     fu += f"{user["type"]} - {user["amount"]} ({user["amount"] * sc_value})\n"
             print(fu)
             if i+1 != blocks_number_to_simulate:
-                print("index\taction\t\t\tamount\tblock creator")
+                print("index\taction\t\t\tamount\tblock creator\tgini")
 
 
         # remove users that dont pass the threshold every block
@@ -223,10 +235,24 @@ def main():
 
     print()
 
+    print("Checks")
+
+    print(f"stake to sc ratio: {total_stake / (total_sc * sc_value)}")
+
+    stake_users_values = [user["amount"] for user in all_users if user["type"] == "stake"]
+    gini = gini_index(stake_users_values)
+    print(f"stake gini: {gini}")
+
+    sc_users_values = [user["amount"] for user in all_users if user["type"] == "sc"]
+    gini = gini_index(sc_users_values)
+    print(f"sc gini: {gini}")
+
+    print()
+
     # Outcomes
     print("Outcomes")
-    print(f"Number of blocks created by sc users {sc_count}")
-    print(f"Number of blocks created by stake users {stake_count}") 
+    print(f"Number of blocks created by sc users: {sc_count}")
+    print(f"Number of blocks created by stake users: {stake_count}") 
 
 
 def gini_index(arr):    
@@ -246,43 +272,40 @@ def gini_index(arr):
     return gini
 
 
-def generate_sc_users(number_of_users, total_sc):
-    # lognormal distribution with inequality
-    users = np.random.lognormal(sigma=2.0, size=number_of_users)
+def generate_users(number_of_users, total_stake, type):
+    if type == "sc":
+        inequality = 1.65
+        min_gini = SC_GINI - 0.05
+        max_gini = SC_GINI + 0.05
+    elif type == "stake":
+        inequality = 2.5
+        min_gini = STAKE_GINI - 0.05
+        max_gini = STAKE_GINI + 0.05
 
-    # scale values to sum up to total_sc
-    users = users / users.sum() * total_sc
+    gini = 0
+    while True:
 
-    # convert to integers
-    users = users.astype(int).tolist()
+        # lognormal distribution, simulates gini inequality
+        users = np.random.lognormal(sigma=inequality, size=number_of_users)
 
-    # the sum after conversion is less than total_sc -> fix this
-    diff = total_sc - sum(users)
+        # scale values to sum up to total_stake
+        users = users / users.sum() * total_stake
 
-    # distribute the diff
-    for i in range(diff):
-        users[i] += 1
+        # convert to integers
+        users = users.astype(int).tolist()
 
-    gini = gini_index(users)
+        # the sum after conversion is less than total_stake -> fix this
+        diff = total_stake - sum(users)
 
-    # check the gini index
-    if 0.6 < gini < 0.8: 
-        return users
-    else:
-        return generate_sc_users(number_of_users, total_sc)    
+        # distribute the diff
+        for i in range(diff):
+            users[i] += 1
 
+        gini = gini_index(users)
 
-def generate_stake_users(number_of_users, total_stake):
-    cut_points = sorted(random.choices(range(0, total_stake+1), k=number_of_users-1))
-
-    users = [cut_points[0]] 
-    
-    for i in range(1, len(cut_points)):
-        users.append(cut_points[i] - cut_points[i-1])
-
-    users.append(total_stake - cut_points[-1])
-
-    return users
+        # check the gini index
+        if min_gini < gini and gini < max_gini:
+            return users
 
 
 def scale_stake_or_sc(num, select):

@@ -43,7 +43,8 @@ def experiment(network_size, total_stake, total_sc, sc_value, threshold_function
     # Derived parameters
     print("Derived parameters:")
 
-    print(f"stake to sc ratio is: x{total_stake / (total_sc * sc_value)}")
+    ratio = total_stake / (total_sc * sc_value)
+    print(f"stake to sc ratio is: x{ratio}")
     
     num_users_with_sc = int(total_sc / 500)
     print(f"num of nodes with sc: {num_users_with_sc}")
@@ -51,7 +52,8 @@ def experiment(network_size, total_stake, total_sc, sc_value, threshold_function
     num_users_with_stake = int(network_size - num_users_with_sc)
     print(f"num of nodes with stake: {num_users_with_stake}")
 
-    print(f"stake_users to sc_users ratio is: x{num_users_with_stake / num_users_with_sc}")
+    users_ratio = num_users_with_stake / num_users_with_sc
+    print(f"stake_users to sc_users ratio is: x{users_ratio}")
 
 
     # Generate users
@@ -106,7 +108,9 @@ def experiment(network_size, total_stake, total_sc, sc_value, threshold_function
             stake_count += 1
 
         # Create block: 
-        x = random.randint(1, 4)
+        actions = [1, 2, 3, 4]
+        weights = [1, 1, 1 * ratio, 1 * ratio]
+        x = random.choices(actions, weights=weights)[0]
         match x:
             # 1. Register new sc user
             case 1:
@@ -226,6 +230,8 @@ def experiment(network_size, total_stake, total_sc, sc_value, threshold_function
     print("Checks")
 
     print(f"stake to sc ratio: {total_stake / (total_sc * sc_value)}")
+    print(f"stake users to sc users ratio: {num_users_with_stake / num_users_with_sc}")
+
     print()
 
     sc_users_values = [user["amount"] for user in all_users if user["type"] == "sc"]
@@ -252,10 +258,10 @@ def experiment(network_size, total_stake, total_sc, sc_value, threshold_function
     # Outcomes
     print("Outcomes")
 
-    print(f"Number of blocks created by sc users: {sc_count}")
     print(f"Number of blocks created by stake users: {stake_count}") 
+    print(f"Number of blocks created by sc users: {sc_count}")
 
-    return (sc_count, stake_count)
+    return (stake_count, sc_count, len(stake_validators), len(sc_validators))
 
 
 def gini_index(arr):    
@@ -318,6 +324,9 @@ def scale_stake_or_sc(num, select):
         
         case "log2":
             return math.log2(num + 1)
+        
+        case "none":
+            return num
 
 
 '''
@@ -375,10 +384,13 @@ def calculate_threshold(select, total):
             return total / int(select[1])
         
         case "c":
-            return min(int(select[1]), total / int(select[2]))
-        
-        case "d":
-            pass            
+            if select[1] == "max":
+                return max(int(select[2]), total / int(select[3]))
+            elif select[1] == "min":
+                return min(int(select[2]), total / int(select[3]))
+
+        case "none":
+            return 0          
 
         
 

@@ -16,19 +16,32 @@ import sys
 
 
 def main():
-    sc_counts = []
     stake_counts = []
+    sc_counts = []
 
-    for _ in range(1):
-        (sc_count, stake_count) = run_experiment.experiment(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8])
-        sc_counts.append(sc_count)
+    stake_validators = []
+    sc_validators = []
+
+    for _ in range(10):
+        (stake_count, sc_count, stake_val, sc_val) = run_experiment.experiment(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8])
         stake_counts.append(stake_count)
+        sc_counts.append(sc_count)
+        stake_validators.append(stake_val)
+        sc_validators.append(sc_val)
 
-    sc_counts_average = sum(sc_counts) / len(sc_counts)
     stake_counts_average = sum(stake_counts) / len(stake_counts)
+    sc_counts_average = sum(sc_counts) / len(sc_counts)
+        
+    stake_validators_average = sum(stake_validators) / len(stake_validators)
+    sc_validators_average = sum(sc_validators) / len(sc_validators)
 
-    print(f"Average SC count: {sc_counts_average}")
+    print()
     print(f"Average Stake count: {stake_counts_average}")
+    print(f"Average SC count: {sc_counts_average}")
+
+    print()
+    print(f"Average Stake validators count: {stake_validators_average}")
+    print(f"Average SC validators count: {sc_validators_average}")
 
 
 if __name__ == "__main__":
